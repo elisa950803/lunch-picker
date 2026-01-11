@@ -68,6 +68,8 @@ export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [error, setError] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{
     hydrated: boolean;
     googlePlaces: 'loading' | 'loaded' | 'missing' | 'error';
@@ -83,6 +85,13 @@ export default function HomePage() {
   // Load persisted form data from sessionStorage on mount (only location, not budget)
   // Safari diagnostics and hydration check
   useEffect(() => {
+    // Hide in dev mode by default, only show if DEBUG_UI flag is set
+    // In production, debug panel is completely removed (not rendered)
+    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+      const debugFlag = localStorage.getItem('DEBUG_UI') === '1';
+      setShowDebugPanel(debugFlag);
+    }
+    
     setDebugInfo(prev => ({ ...prev, hydrated: true }));
     
     // Check storage availability
@@ -211,15 +220,16 @@ export default function HomePage() {
   };
 
   const handleQuickFillBryantPark = () => {
-    // One Bryant Park preset - works without API calls
+    // Bryant Park preset - uses lat/lng directly (no placeId) to avoid validation issues
+    // This ensures it always works without requiring dropdown selection
     const ONE_BRYANT_PARK: SelectedPlace = {
-      placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4', // Known place ID for One Bryant Park
-      locationText: 'One Bryant Park, New York, NY',
-      lat: 40.7537,
+      placeId: '', // Empty placeId - use lat/lng directly to bypass placeId validation
+      locationText: 'Bryant Park, New York, NY',
+      lat: 40.7536,
       lng: -73.9832,
       city: 'New York',
       state: 'NY',
-      formattedAddress: 'One Bryant Park, New York, NY 10036, USA',
+      formattedAddress: 'Bryant Park, New York, NY 10018, USA',
     };
     
     setLocationError('');
@@ -349,24 +359,9 @@ export default function HomePage() {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLocationError('');
-
-    if (!locationText.trim()) {
-      setLocationError('Location is required');
-      return;
-    }
-
-    // Validate that user selected a suggestion (has placeId or lat/lng)
-    // But allow submission if locationText is set and we're waiting for async place lookup
-    if (!selectedPlace && locationText.trim() && !isLoadingLocation) {
-      setLocationError('Please pick a suggestion so we can locate it accurately.');
-      return;
-    }
-
-    setIsSubmitting(true);
+  // UX Fix #3: Extract submission logic so it can be called from both handleSubmit and handleRetry
+  const performSubmission = async () => {
+    setSubmitError(null);
 
     try {
       const requestBody: any = {
@@ -376,21 +371,24 @@ export default function HomePage() {
         maxLunchMinutes: typeof maxLunchMinutes === 'number' ? maxLunchMinutes : undefined,
       };
 
-      // Prefer placeId, then lat/lng, then locationText
+      // Prefer placeId, then lat/lng, then locationText (fallback geocoding)
       if (selectedPlace?.placeId) {
         requestBody.placeId = selectedPlace.placeId;
       } else if (selectedPlace?.lat && selectedPlace?.lng && selectedPlace.lat !== 0 && selectedPlace.lng !== 0) {
         requestBody.lat = selectedPlace.lat;
         requestBody.lng = selectedPlace.lng;
       } else {
+        // UX Fix #1: Allow submission with just locationText - backend will geocode it
         requestBody.locationText = locationText.trim();
       }
 
-      // Use backend API (from config.json)
+      // Check if apiBaseUrl exists, else show demo mode message
       if (!apiBaseUrl) {
-        throw new Error('Full recommendations require a backend server. Please set API_BASE_URL in config.json. Demo buttons are available for testing.');
+        setSubmitError('Backend server URL is not configured. Please configure the API_BASE_URL in config.json to enable recommendations.');
+        return; // Keep isSubmitting true to show error on loading screen
       }
 
+      // Use backend API (from config.json)
       const data = await getRecommendations(requestBody, apiBaseUrl);
       
       // Store results in sessionStorage and navigate
@@ -398,15 +396,54 @@ export default function HomePage() {
       setIsSubmitting(false);
       router.push('/results');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setIsSubmitting(false);
+      // UX Fix #1: Handle geocoding errors with friendly messages
+      let errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      
+      // Check if error is about location not in US
+      if (errorMessage.includes('Location must be in the United States') || errorMessage.includes('must be in the United States')) {
+        errorMessage = 'Location must be in the United States. Please try a US address or select a suggestion from the dropdown.';
+      } else if (errorMessage.includes('Could not find location') || errorMessage.includes('Geocoding failed') || errorMessage.includes('ZERO_RESULTS')) {
+        errorMessage = "Couldn't locate that address — try selecting a suggestion or adding city/state.";
+      }
+      
+      setSubmitError(errorMessage);
+      // UX Fix #3: Keep isSubmitting true to show error on loading screen (don't reset to form)
+      // Don't set setIsSubmitting(false) here - let user retry or go back
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLocationError('');
+    setSubmitError(null);
+
+    if (!locationText.trim()) {
+      setLocationError('Location is required');
+      return;
+    }
+
+    // UX Fix #1: Allow submission without selectedPlace - backend will geocode locationText
+    // Removed validation that required selectedPlace; backend handles geocoding
+
+    setIsSubmitting(true);
+    await performSubmission();
+  };
+
+  // UX Fix #3: Handler to retry submission (resets error and resubmits)
+  const handleRetry = async () => {
+    // Ensure isSubmitting is true FIRST to prevent any flicker back to form
+    setIsSubmitting(true);
+    setSubmitError(null);
+    // Resubmit (this will maintain isSubmitting=true throughout)
+    await performSubmission();
+  };
+
+  // UX Fix #3: Show loading state (with optional error) until success or explicit cancel
   if (isSubmitting) {
     return (
       <AppShell>
-        <LoadingState />
+        <LoadingState error={submitError || null} onRetry={submitError ? handleRetry : undefined} />
       </AppShell>
     );
   }
@@ -414,8 +451,8 @@ export default function HomePage() {
   return (
     <AppShell>
       <div className="max-w-2xl mx-auto">
-        {/* Safari Diagnostics (dev only) */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* Safari Diagnostics: Hidden in dev mode by default (enable with localStorage.DEBUG_UI='1'), removed in production */}
+        {process.env.NODE_ENV !== 'production' && showDebugPanel && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
             <div className="font-semibold mb-1">Safari Diagnostics:</div>
             <div>Hydration: {debugInfo.hydrated ? '✓ ON' : '✗ OFF'}</div>
@@ -478,6 +515,11 @@ export default function HomePage() {
               {!locationError && !selectedPlace && (
                 <p className="mt-1.5 text-xs text-gray-500">
                   💡 Where do you work? We'll find the best spots nearby!
+                </p>
+              )}
+              {configLoaded && (
+                <p className="mt-1.5 text-xs text-gray-400">
+                  API: {apiBaseUrl || 'Loading...'}
                 </p>
               )}
             </div>

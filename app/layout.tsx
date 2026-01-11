@@ -32,13 +32,13 @@ export default function RootLayout({
       <body>
         <ConfigProvider>
           {googleMapsApiKey ? (
-            <Script
+          <Script
               id="google-maps-script"
-              src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
-              strategy="afterInteractive"
+            src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+            strategy="afterInteractive"
             />
           ) : null}
-          {children}
+        {children}
         </ConfigProvider>
       </body>
     </html>

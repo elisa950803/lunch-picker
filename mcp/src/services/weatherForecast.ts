@@ -201,7 +201,9 @@ function normalizeForecast(data: {
   const condition = WEATHER_CONDITIONS[weatherCode] || 'Unknown';
   const rainMm = data.rain ?? 0;
   const precipitationMm = data.precipitation ?? 0;
-  const windSpeedMs = data.wind_speed_10m ?? 0;
+  // Open-Meteo API returns wind_speed_10m in km/h, convert to m/s for internal use
+  // 1 km/h = 1/3.6 m/s
+  const windSpeedMs = (data.wind_speed_10m ?? 0) / 3.6;
 
   // Derive weather bucket and maxWalkMinutes using structured fields
   const { weatherBucket, maxWalkMinutes } = deriveWeatherBucket({
@@ -212,6 +214,16 @@ function normalizeForecast(data: {
     apparentTemperatureC: feelsLikeC,
   });
 
+  // Determine isRainy based on actual precipitation OR weather codes that indicate rain/drizzle/snow
+  // Do NOT use precipitationProb (forecast probability) as it's not actual current conditions
+  const isActualRain = rainMm > 0 || precipitationMm > 0;
+  // Weather codes that indicate rain/drizzle/snow (51-67, 71-86, 95-99)
+  // Weather codes ARE actual current conditions, not forecasts
+  const isRainyCode = (weatherCode >= 51 && weatherCode <= 67) || // Drizzle and rain codes
+                      (weatherCode >= 71 && weatherCode <= 86) || // Snow codes
+                      (weatherCode >= 95 && weatherCode <= 99);    // Thunderstorm codes
+  const isRainy = isActualRain || isRainyCode;
+  
   return {
     tempC,
     feelsLikeC,
@@ -219,7 +231,7 @@ function normalizeForecast(data: {
     condition,
     isCold: feelsLikeC < 8,
     isHot: tempC > 25,
-    isRainy: rainMm > 0 || precipitationMm > 0 || precipitationProb > 50,
+    isRainy,
     // Structured fields
     temperatureC: tempC,
     feelsLikeC_temp: feelsLikeC,

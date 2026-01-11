@@ -86,7 +86,7 @@ export default function LocationSuggestDropdown({
       }
       if (!state && types.includes('administrative_area_level_1')) {
         state = component.short_name;
-      }
+    }
     }
 
     return { city, state };
@@ -136,7 +136,7 @@ export default function LocationSuggestDropdown({
           const PlacesServiceStatus = googleMaps.maps?.places?.PlacesServiceStatus;
           const isOk = statusStr === 'OK' || (PlacesServiceStatus && status === PlacesServiceStatus.OK);
           const isZeroResults = statusStr === 'ZERO_RESULTS' || (PlacesServiceStatus && status === PlacesServiceStatus.ZERO_RESULTS);
-          
+
           if (isOk && predictions && predictions.length > 0) {
             // Convert predictions to our format
             const formattedSuggestions: LocationSuggestion[] = predictions.slice(0, 8).map((prediction) => {
@@ -149,7 +149,7 @@ export default function LocationSuggestDropdown({
                 if (parts.length >= 2) {
                   city = parts[0];
                   state = parts[1].trim();
-                }
+        }
               }
 
               return {
@@ -173,9 +173,9 @@ export default function LocationSuggestDropdown({
             if (statusStr && !isZeroResults && statusStr !== 'OK') {
               setError('Autocomplete unavailable — keep typing');
             } else {
-              setError(null);
-            }
-            setSuggestions([]);
+        setError(null);
+        }
+        setSuggestions([]);
           }
           setIsLoading(false);
         }

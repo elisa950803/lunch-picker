@@ -3,16 +3,17 @@
  * Loads config.json at runtime (no rebuild needed to change backend URL)
  */
 
-interface RuntimeConfig {
+export type RuntimeConfig = {
   API_BASE_URL: string;
-}
+};
 
+// Module-level cache (loads once)
 let cachedConfig: RuntimeConfig | null = null;
 let configLoadPromise: Promise<RuntimeConfig | null> | null = null;
 
 /**
  * Get the base path for the app (e.g., /lunch-picker on GitHub Pages)
- * Reusable function for basePath detection
+ * Derived from <base href> if present, else empty string
  */
 function getBasePath(): string {
   if (typeof window === 'undefined') return '';
@@ -24,20 +25,16 @@ function getBasePath(): string {
     return href.replace(/\/$/, ''); // Remove trailing slash
   }
   
-  // Else derive from window.location.pathname first segment
-  const pathname = window.location.pathname;
-  const segments = pathname.split('/').filter(Boolean);
-  if (segments.length > 0) {
-    return '/' + segments[0];
-  }
-  
+  // Else empty string (no basePath)
   return '';
 }
 
 /**
  * Load runtime configuration from config.json
+ * Must not throw; returns null on any failure
+ * Uses cache: "no-store" to always fetch fresh config
  */
-export async function loadConfig(): Promise<RuntimeConfig | null> {
+export async function loadRuntimeConfig(): Promise<RuntimeConfig | null> {
   // Return cached config if available
   if (cachedConfig) {
     return cachedConfig;
@@ -55,7 +52,7 @@ export async function loadConfig(): Promise<RuntimeConfig | null> {
       const configUrl = `${basePath}/config.json`;
       
       const response = await fetch(configUrl, {
-        cache: 'no-cache', // Always check for updates
+        cache: 'no-store', // Always fetch fresh config
       });
       
       if (!response.ok) {
@@ -88,13 +85,6 @@ export async function loadConfig(): Promise<RuntimeConfig | null> {
   })();
   
   return configLoadPromise;
-}
-
-/**
- * Get API base URL from config (synchronous, returns cached value or empty string)
- */
-export function getApiBaseUrl(): string {
-  return cachedConfig?.API_BASE_URL || '';
 }
 
 /**
