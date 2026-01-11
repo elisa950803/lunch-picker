@@ -14,24 +14,27 @@ export default function RootLayout({
 }) {
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
   
+  // Debug: Log API key availability (length only, not the key itself)
+  if (typeof window === 'undefined') {
+    // Server-side render
+    const keyLength = googleMapsApiKey ? googleMapsApiKey.length : 0;
+    if (keyLength === 0) {
+      console.warn('[Google Maps] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set at build time. Script will not load.');
+    } else {
+      console.log(`[Google Maps] API key found (length: ${keyLength}). Script will load.`);
+    }
+  }
+  
   return (
     <html lang="en">
       <body>
-        {googleMapsApiKey && (
+        {googleMapsApiKey ? (
           <Script
+            id="google-maps-script"
             src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
             strategy="afterInteractive"
-            onLoad={() => {
-              // Script loaded successfully
-              if (typeof window !== 'undefined' && (window as any).google?.maps?.places) {
-                console.log('Google Maps Places API loaded successfully');
-              }
-            }}
-            onError={(e) => {
-              console.error('Google Maps Places API script failed to load:', e);
-            }}
           />
-        )}
+        ) : null}
         {children}
       </body>
     </html>

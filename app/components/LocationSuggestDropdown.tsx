@@ -35,6 +35,44 @@ export default function LocationSuggestDropdown({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [googleMapsReady, setGoogleMapsReady] = useState(false);
+
+  // Wait for Google Maps Places API to be available
+  useEffect(() => {
+    const checkGoogleMaps = () => {
+      const googleMaps = (window as any).google;
+      const isReady = !!(
+        googleMaps?.maps?.places?.AutocompleteService
+      );
+      
+      if (isReady && !googleMapsReady) {
+        console.log('[LocationSuggestDropdown] Google Maps Places API is ready');
+        setGoogleMapsReady(true);
+      }
+      
+      return isReady;
+    };
+
+    // Check immediately
+    if (checkGoogleMaps()) {
+      return;
+    }
+
+    // Poll every 200ms for up to 5 seconds
+    let retryCount = 0;
+    const maxRetries = 25; // 5 seconds (25 * 200ms)
+    const intervalId = setInterval(() => {
+      retryCount++;
+      if (checkGoogleMaps() || retryCount >= maxRetries) {
+        clearInterval(intervalId);
+        if (retryCount >= maxRetries && !googleMapsReady) {
+          console.warn('[LocationSuggestDropdown] Google Maps Places API not available after 5 seconds');
+        }
+      }
+    }, 200);
+
+    return () => clearInterval(intervalId);
+  }, [googleMapsReady]);
 
   // Helper function to extract city and state from address components
   const extractCityAndState = (addressComponents: any[]): { city?: string; state?: string } => {
@@ -69,11 +107,16 @@ export default function LocationSuggestDropdown({
 
     // Check if Google Places AutocompleteService is available
     const googleMaps = (window as any).google;
-    if (!googleMaps?.maps?.places?.AutocompleteService) {
+    const autocompleteServiceAvailable = !!(
+      googleMaps?.maps?.places?.AutocompleteService
+    );
+    
+    if (!autocompleteServiceAvailable) {
       setIsLoading(false);
       setError(null);
       setSuggestions([]);
-      return; // Google Maps not loaded yet, will retry when it loads
+      // Will retry when googleMapsReady becomes true
+      return;
     }
 
     // Debounce: wait 300ms before making request
@@ -86,11 +129,16 @@ export default function LocationSuggestDropdown({
           types: ['geocode'], // Only geocoding results (addresses, not businesses)
           componentRestrictions: { country: 'us' }, // Restrict to US
         },
-        (predictions: any[] | null, status: string) => {
-          if (status === 'OK' && predictions) {
+        (predictions: any[] | null, status: any) => {
+          // Handle both string and enum status values
+          const statusStr = typeof status === 'string' ? status : String(status || '');
+          // Google Maps API status can be string 'OK' or enum value
+          const PlacesServiceStatus = googleMaps.maps?.places?.PlacesServiceStatus;
+          const isOk = statusStr === 'OK' || (PlacesServiceStatus && status === PlacesServiceStatus.OK);
+          const isZeroResults = statusStr === 'ZERO_RESULTS' || (PlacesServiceStatus && status === PlacesServiceStatus.ZERO_RESULTS);
+          
+          if (isOk && predictions && predictions.length > 0) {
             // Convert predictions to our format
-            // We'll need to get place details to get lat/lng, but for now show predictions
-            // The user can select and we'll get details via Geocoder or PlacesService
             const formattedSuggestions: LocationSuggestion[] = predictions.slice(0, 8).map((prediction) => {
               // Extract city/state from structured_formatting if available
               let city: string | undefined;
@@ -116,12 +164,17 @@ export default function LocationSuggestDropdown({
 
             setSuggestions(formattedSuggestions);
             setError(null);
-          } else if (status === 'ZERO_RESULTS') {
+          } else if (isZeroResults) {
             setSuggestions([]);
             setError(null);
           } else {
-            console.error('Google Places AutocompleteService error:', status);
-            setError('Autocomplete unavailable — keep typing');
+            console.error('Google Places AutocompleteService error:', status, statusStr);
+            // Only show error for actual API errors, not for zero results
+            if (statusStr && !isZeroResults && statusStr !== 'OK') {
+              setError('Autocomplete unavailable — keep typing');
+            } else {
+              setError(null);
+            }
             setSuggestions([]);
           }
           setIsLoading(false);
@@ -132,7 +185,7 @@ export default function LocationSuggestDropdown({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [query, isOpen]);
+  }, [query, isOpen, googleMapsReady]);
 
   // Handle suggestion selection - get place details to get lat/lng
   const handleSuggestionSelect = (suggestion: LocationSuggestion) => {
@@ -142,38 +195,56 @@ export default function LocationSuggestDropdown({
       return;
     }
 
-    // Get place details to get lat/lng
+    // Get place details to get lat/lng using PlacesService
     const googleMaps = (window as any).google;
-    if (!googleMaps?.maps?.Geocoder) {
-      // Fallback: use suggestion as-is if Geocoder not available
+    if (!googleMaps?.maps?.places?.PlacesService) {
+      // Fallback: use suggestion as-is if PlacesService not available
       onSelect(suggestion);
       return;
     }
 
-    // Use Geocoder to get lat/lng from placeId
-    const geocoder = new googleMaps.maps.Geocoder();
-    geocoder.geocode({ placeId: suggestion.placeId }, (results: any[] | null, status: string) => {
-      if (status === 'OK' && results && results.length > 0) {
-        const result = results[0];
-        const location = result.geometry.location;
-        const lat = typeof location.lat === 'function' ? location.lat() : location.lat;
-        const lng = typeof location.lng === 'function' ? location.lng() : location.lng;
+    // Create a temporary div for PlacesService (required by API)
+    const service = new googleMaps.maps.places.PlacesService(document.createElement('div'));
+    
+    service.getDetails(
+      {
+        placeId: suggestion.placeId,
+        fields: ['geometry.location', 'formatted_address', 'address_components', 'name'],
+      },
+        (place: any, status: any) => {
+        // Handle both string and enum status values
+        const statusStr = typeof status === 'string' ? status : String(status || '');
+        const PlacesServiceStatus = googleMaps.maps?.places?.PlacesServiceStatus;
+        const isOk = statusStr === 'OK' || (PlacesServiceStatus && status === PlacesServiceStatus.OK);
+        
+        if (isOk && place) {
+          const location = place.geometry?.location;
+          if (location) {
+            const lat = typeof location.lat === 'function' ? location.lat() : location.lat;
+            const lng = typeof location.lng === 'function' ? location.lng() : location.lng;
 
-        // Extract city/state from address components
-        const { city, state } = extractCityAndState(result.address_components || []);
+            // Extract city/state from address components
+            const { city, state } = extractCityAndState(place.address_components || []);
 
-        onSelect({
-          ...suggestion,
-          lat,
-          lng,
-          city: city || suggestion.city,
-          state: state || suggestion.state,
-        });
-      } else {
-        // Fallback: use suggestion as-is if geocoding fails
-        onSelect(suggestion);
+            onSelect({
+              ...suggestion,
+              lat,
+              lng,
+              city: city || suggestion.city,
+              state: state || suggestion.state,
+              label: place.formatted_address || place.name || suggestion.label,
+            });
+          } else {
+            // Fallback: use suggestion as-is if no location
+            onSelect(suggestion);
+          }
+        } else {
+          // Fallback: use suggestion as-is if getDetails fails
+          console.warn('PlacesService.getDetails failed:', status, statusStr);
+          onSelect(suggestion);
+        }
       }
-    });
+    );
   };
 
   // Handle keyboard navigation

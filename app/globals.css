@@ -16,7 +16,7 @@
   margin-top: 0.25rem !important;
   font-family: inherit !important;
   overflow: visible !important; /* Changed from hidden to visible so dropdown can extend beyond container */
-  z-index: 9999 !important; /* Ensure dropdown appears above all other elements */
+  z-index: 99999 !important; /* Ensure dropdown appears above all other elements */
 }
 
 .pac-item {

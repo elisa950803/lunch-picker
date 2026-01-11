@@ -1,11 +1,12 @@
+const isProd = process.env.NODE_ENV === 'production';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Allow importing from outside the app directory
   transpilePackages: [],
-  // GitHub Pages configuration
   output: 'export',
-  basePath: '/lunch-picker',
-  assetPrefix: '/lunch-picker/',
+  trailingSlash: true,
+  ...(isProd ? { basePath: '/lunch-picker', assetPrefix: '/lunch-picker/' } : {}),
 };
 
 module.exports = nextConfig;
