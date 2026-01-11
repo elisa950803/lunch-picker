@@ -19,6 +19,9 @@ interface LocationSuggestDropdownProps {
   inputRef: React.RefObject<HTMLInputElement>;
 }
 
+// Google Maps types - using any to avoid conflicts with LocationAutocomplete declarations
+// The actual Google Maps API will be available at runtime
+
 export default function LocationSuggestDropdown({
   query,
   onSelect,
@@ -33,13 +36,26 @@ export default function LocationSuggestDropdown({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Debounced fetch suggestions
-  useEffect(() => {
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  // Helper function to extract city and state from address components
+  const extractCityAndState = (addressComponents: any[]): { city?: string; state?: string } => {
+    let city: string | undefined;
+    let state: string | undefined;
+
+    for (const component of addressComponents) {
+      const types = component.types;
+      if (!city && (types.includes('locality') || types.includes('sublocality') || types.includes('administrative_area_level_2'))) {
+        city = component.long_name;
+      }
+      if (!state && types.includes('administrative_area_level_1')) {
+        state = component.short_name;
+      }
     }
 
+    return { city, state };
+  };
+
+  // Debounced fetch suggestions using Google Places AutocompleteService
+  useEffect(() => {
     if (!isOpen || query.trim().length < 2) {
       setSuggestions([]);
       setIsLoading(false);
@@ -51,48 +67,114 @@ export default function LocationSuggestDropdown({
     setError(null);
     setSelectedIndex(-1);
 
-    // Create new AbortController for this request
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
+    // Check if Google Places AutocompleteService is available
+    const googleMaps = (window as any).google;
+    if (!googleMaps?.maps?.places?.AutocompleteService) {
+      setIsLoading(false);
+      setError(null);
+      setSuggestions([]);
+      return; // Google Maps not loaded yet, will retry when it loads
+    }
 
     // Debounce: wait 300ms before making request
-    const timeoutId = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/location-suggest?q=${encodeURIComponent(query.trim())}`, {
-          signal: abortController.signal,
-        });
+    const timeoutId = setTimeout(() => {
+      const autocompleteService = new googleMaps.maps.places.AutocompleteService();
+      
+      autocompleteService.getPlacePredictions(
+        {
+          input: query.trim(),
+          types: ['geocode'], // Only geocoding results (addresses, not businesses)
+          componentRestrictions: { country: 'us' }, // Restrict to US
+        },
+        (predictions: any[] | null, status: string) => {
+          if (status === 'OK' && predictions) {
+            // Convert predictions to our format
+            // We'll need to get place details to get lat/lng, but for now show predictions
+            // The user can select and we'll get details via Geocoder or PlacesService
+            const formattedSuggestions: LocationSuggestion[] = predictions.slice(0, 8).map((prediction) => {
+              // Extract city/state from structured_formatting if available
+              let city: string | undefined;
+              let state: string | undefined;
+              
+              if (prediction.structured_formatting?.secondary_text) {
+                const parts = prediction.structured_formatting.secondary_text.split(', ');
+                if (parts.length >= 2) {
+                  city = parts[0];
+                  state = parts[1].trim();
+                }
+              }
 
-        if (abortController.signal.aborted) {
-          return; // Request was cancelled
-        }
+              return {
+                label: prediction.description,
+                placeId: prediction.place_id,
+                lat: 0, // Will be filled when selected
+                lng: 0, // Will be filled when selected
+                city,
+                state,
+              };
+            });
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch suggestions');
-        }
-
-        const data = await response.json();
-        setSuggestions(data.suggestions || []);
-        setError(null);
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          // Request was cancelled, ignore
-          return;
-        }
-        console.error('Failed to fetch location suggestions:', err);
-        setError('Autocomplete unavailable — keep typing');
-        setSuggestions([]);
-      } finally {
-        if (!abortController.signal.aborted) {
+            setSuggestions(formattedSuggestions);
+            setError(null);
+          } else if (status === 'ZERO_RESULTS') {
+            setSuggestions([]);
+            setError(null);
+          } else {
+            console.error('Google Places AutocompleteService error:', status);
+            setError('Autocomplete unavailable — keep typing');
+            setSuggestions([]);
+          }
           setIsLoading(false);
         }
-      }
+      );
     }, 300);
 
     return () => {
       clearTimeout(timeoutId);
-      abortController.abort();
     };
   }, [query, isOpen]);
+
+  // Handle suggestion selection - get place details to get lat/lng
+  const handleSuggestionSelect = (suggestion: LocationSuggestion) => {
+    if (!suggestion.placeId) {
+      // Fallback: use suggestion as-is if no placeId
+      onSelect(suggestion);
+      return;
+    }
+
+    // Get place details to get lat/lng
+    const googleMaps = (window as any).google;
+    if (!googleMaps?.maps?.Geocoder) {
+      // Fallback: use suggestion as-is if Geocoder not available
+      onSelect(suggestion);
+      return;
+    }
+
+    // Use Geocoder to get lat/lng from placeId
+    const geocoder = new googleMaps.maps.Geocoder();
+    geocoder.geocode({ placeId: suggestion.placeId }, (results: any[] | null, status: string) => {
+      if (status === 'OK' && results && results.length > 0) {
+        const result = results[0];
+        const location = result.geometry.location;
+        const lat = typeof location.lat === 'function' ? location.lat() : location.lat;
+        const lng = typeof location.lng === 'function' ? location.lng() : location.lng;
+
+        // Extract city/state from address components
+        const { city, state } = extractCityAndState(result.address_components || []);
+
+        onSelect({
+          ...suggestion,
+          lat,
+          lng,
+          city: city || suggestion.city,
+          state: state || suggestion.state,
+        });
+      } else {
+        // Fallback: use suggestion as-is if geocoding fails
+        onSelect(suggestion);
+      }
+    });
+  };
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -112,7 +194,7 @@ export default function LocationSuggestDropdown({
         setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
       } else if (e.key === 'Enter' && selectedIndex >= 0 && selectedIndex < suggestions.length) {
         e.preventDefault();
-        onSelect(suggestions[selectedIndex]);
+        handleSuggestionSelect(suggestions[selectedIndex]);
         onClose();
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -183,7 +265,7 @@ export default function LocationSuggestDropdown({
               key={suggestion.placeId || index}
               type="button"
               onClick={() => {
-                onSelect(suggestion);
+                handleSuggestionSelect(suggestion);
                 onClose();
               }}
               className={`w-full px-4 py-3 text-left hover:bg-orange-50 transition-colors ${

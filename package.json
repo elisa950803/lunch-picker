@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy": "gh-pages -d out"
   },
   "dependencies": {
     "date-holidays": "^3.26.6",
@@ -23,6 +24,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.23",
+    "gh-pages": "^6.3.0",
     "jest": "^30.2.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",

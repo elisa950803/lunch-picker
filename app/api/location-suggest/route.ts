@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mark route as dynamic
-export const dynamic = 'force-dynamic';
+// Note: API routes are excluded from static export builds (output: 'export')
+// This route will not be available on GitHub Pages (static hosting)
 
 // In-memory cache for location suggestions (5 minute TTL)
 const suggestionCache = new Map<string, { data: any[]; expires: number }>();

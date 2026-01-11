@@ -2,6 +2,23 @@
 
 A Next.js API that provides restaurant recommendations based on location, weather, holidays, and preferences.
 
+## 🌐 GitHub Pages Deployment
+
+This app is deployed to GitHub Pages at: **https://elisa950803.github.io/lunch-picker/**
+
+**Important:** GitHub Pages serves the app from the `gh-pages` branch (containing the built static files), NOT from the `main` branch. The `main` branch contains the source code, while `gh-pages` contains the static build output.
+
+### Updating the Deployment
+
+To update the GitHub Pages site after making changes:
+
+```bash
+npm run build    # Build the static site
+npm run deploy   # Deploy to gh-pages branch
+```
+
+The `gh-pages` branch should NOT be manually edited. It's automatically generated from the `out/` directory after running `npm run build`.
+
 ## Setup
 
 1. **Install dependencies:**

@@ -80,11 +80,10 @@ temp/
 # Build outputs
 build/
 dist/
-out/
 *.min.js
 *.min.css
 
 # Next.js
 .next/
-out/
 .vercel
+# Note: out/ is NOT ignored - needed for gh-pages deployment
