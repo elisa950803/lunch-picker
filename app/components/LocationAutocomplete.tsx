@@ -381,7 +381,7 @@ export default function LocationAutocomplete({
         placeholder={placeholder}
         required
         disabled={disabled}
-        autoComplete="off"
+            autoComplete="new-password"
       />
       
       {/* In-app dropdown suggestions */}

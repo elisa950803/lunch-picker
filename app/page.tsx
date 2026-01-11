@@ -7,6 +7,9 @@ import Card from './components/Card';
 import Badge from './components/Badge';
 import LoadingState from './components/LoadingState';
 import LocationAutocomplete from './components/LocationAutocomplete';
+import { safeGetItem, safeSetItem } from './utils/storage';
+import { getRecommendations } from './lib/api';
+import { useConfig } from './components/ConfigProvider';
 
 const DIETARY_OPTIONS = [
   'vegan',
@@ -53,6 +56,7 @@ interface SelectedPlace {
 
 export default function HomePage() {
   const router = useRouter();
+  const { apiBaseUrl, loaded: configLoaded } = useConfig();
   const [locationText, setLocationText] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
   const [locationError, setLocationError] = useState('');
@@ -64,11 +68,76 @@ export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState<{
+    hydrated: boolean;
+    googlePlaces: 'loading' | 'loaded' | 'missing' | 'error';
+    storage: 'ok' | 'blocked' | 'unknown';
+    lastError: string | null;
+  }>({
+    hydrated: false,
+    googlePlaces: 'loading',
+    storage: 'unknown',
+    lastError: null,
+  });
 
   // Load persisted form data from sessionStorage on mount (only location, not budget)
+  // Safari diagnostics and hydration check
+  useEffect(() => {
+    setDebugInfo(prev => ({ ...prev, hydrated: true }));
+    
+    // Check storage availability
+    try {
+      const testKey = '__storage_test__';
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.setItem(testKey, 'test');
+        window.sessionStorage.removeItem(testKey);
+        setDebugInfo(prev => ({ ...prev, storage: 'ok' }));
+      } else {
+        setDebugInfo(prev => ({ ...prev, storage: 'blocked' }));
+      }
+    } catch (e) {
+      setDebugInfo(prev => ({ ...prev, storage: 'blocked' }));
+    }
+
+    // Check Google Places API
+    let checkCount = 0;
+    const maxChecks = 25; // 5 seconds (25 * 200ms)
+    const checkInterval = setInterval(() => {
+      checkCount++;
+      const googleMaps = (window as any).google;
+      if (googleMaps?.maps?.places?.AutocompleteService) {
+        setDebugInfo(prev => ({ ...prev, googlePlaces: 'loaded' }));
+        clearInterval(checkInterval);
+      } else if (checkCount >= maxChecks) {
+        setDebugInfo(prev => ({ ...prev, googlePlaces: 'missing' }));
+        clearInterval(checkInterval);
+      }
+    }, 200);
+
+    // Global error handlers (dev only)
+    if (process.env.NODE_ENV === 'development') {
+      const errorHandler = (event: ErrorEvent) => {
+        setDebugInfo(prev => ({ ...prev, lastError: event.message || String(event.error) }));
+      };
+      const rejectionHandler = (event: PromiseRejectionEvent) => {
+        setDebugInfo(prev => ({ ...prev, lastError: String(event.reason) }));
+      };
+      window.addEventListener('error', errorHandler);
+      window.addEventListener('unhandledrejection', rejectionHandler);
+      return () => {
+        clearInterval(checkInterval);
+        window.removeEventListener('error', errorHandler);
+        window.removeEventListener('unhandledrejection', rejectionHandler);
+      };
+    }
+
+    return () => clearInterval(checkInterval);
+  }, []);
+
+  // Load form data from storage
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem(FORM_STORAGE_KEY);
+      const stored = safeGetItem('sessionStorage', FORM_STORAGE_KEY);
       if (stored) {
         const formData: FormData = JSON.parse(stored);
         if (formData.locationText) setLocationText(formData.locationText);
@@ -110,7 +179,7 @@ export default function HomePage() {
       cuisine,
       maxLunchMinutes,
     };
-    sessionStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formData));
+    safeSetItem('sessionStorage', FORM_STORAGE_KEY, JSON.stringify(formData));
   }, [locationText, selectedPlace, budget, dietary, cuisine, maxLunchMinutes, userTouchedBudget]);
 
   const toggleDietary = (option: string) => {
@@ -141,10 +210,20 @@ export default function HomePage() {
     }
   };
 
-  const handleQuickFillBryantPark = async () => {
-    const locationText = 'One Bryant Park, NYC';
+  const handleQuickFillBryantPark = () => {
+    // One Bryant Park preset - works without API calls
+    const ONE_BRYANT_PARK: SelectedPlace = {
+      placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4', // Known place ID for One Bryant Park
+      locationText: 'One Bryant Park, New York, NY',
+      lat: 40.7537,
+      lng: -73.9832,
+      city: 'New York',
+      state: 'NY',
+      formattedAddress: 'One Bryant Park, New York, NY 10036, USA',
+    };
+    
     setLocationError('');
-    setIsLoadingLocation(true);
+    setIsLoadingLocation(false);
     
     // Clear previous dietary/cuisine selections to avoid defaults
     setDietary([]);
@@ -158,120 +237,8 @@ export default function HomePage() {
       setBudget('');
     }
     
-    // Set a temporary selectedPlace immediately so validation passes
-    // Will be updated with full details when API responds
-    const tempPlace: SelectedPlace = {
-      placeId: '',
-      locationText: locationText,
-      lat: 0,
-      lng: 0,
-    };
-    setSelectedPlace(tempPlace);
-    setLocationText(locationText);
-
-    try {
-      // Use Google Places Text Search to find One Bryant Park
-      const googleMaps = (window as any).google;
-      if (!googleMaps?.maps?.places) {
-        // Wait for script to load
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      if (googleMaps?.maps?.places) {
-        const PlacesService = googleMaps.maps.places;
-        const service = new PlacesService(document.createElement('div'));
-        
-        const request = {
-          query: locationText,
-          fields: ['place_id', 'geometry', 'formatted_address', 'address_components', 'name'],
-        };
-
-        service.textSearch(request, (results: any[] | null, status: string) => {
-          if (status === 'OK' && results && results.length > 0) {
-            const result = results[0];
-            
-            if (result.geometry?.location) {
-              const lat = result.geometry.location.lat();
-              const lng = result.geometry.location.lng();
-              
-              // Extract city and state
-              let city: string | undefined;
-              let state: string | undefined;
-              
-              if (result.address_components) {
-                for (const component of result.address_components) {
-                  const types = component.types;
-                  if (!city && (types.includes('locality') || types.includes('sublocality') || types.includes('administrative_area_level_2'))) {
-                    city = component.long_name;
-                  }
-                  if (!state && types.includes('administrative_area_level_1')) {
-                    state = component.short_name;
-                  }
-                }
-              }
-
-              const place: SelectedPlace = {
-                placeId: result.place_id || '',
-                locationText: result.formatted_address || result.name || locationText,
-                lat,
-                lng,
-                city,
-                state,
-                formattedAddress: result.formatted_address,
-              };
-
-              setSelectedPlace(place);
-              setLocationText(place.locationText);
-              setLocationError('');
-            } else {
-              // Fallback: set temporary place with locationText for validation
-              const place: SelectedPlace = {
-                placeId: '',
-                locationText: locationText,
-                lat: 0,
-                lng: 0,
-              };
-              setSelectedPlace(place);
-              setLocationText(locationText);
-            }
-          } else {
-            // Fallback: set temporary place with locationText for validation
-            const place: SelectedPlace = {
-              placeId: '',
-              locationText: locationText,
-              lat: 0,
-              lng: 0,
-            };
-            setSelectedPlace(place);
-            setLocationText(locationText);
-          }
-          setIsLoadingLocation(false);
-        });
-      } else {
-        // Fallback: set temporary place with locationText for validation
-        const place: SelectedPlace = {
-          placeId: '',
-          locationText: locationText,
-          lat: 0,
-          lng: 0,
-        };
-        setSelectedPlace(place);
-        setLocationText(locationText);
-        setIsLoadingLocation(false);
-      }
-    } catch (err) {
-      console.error('Error filling Bryant Park:', err);
-      // Fallback: set temporary place with locationText for validation
-      const place: SelectedPlace = {
-        placeId: '',
-        locationText: locationText,
-        lat: 0,
-        lng: 0,
-      };
-      setSelectedPlace(place);
-      setLocationText(locationText);
-      setIsLoadingLocation(false);
-    }
+    setSelectedPlace(ONE_BRYANT_PARK);
+    setLocationText(ONE_BRYANT_PARK.locationText);
   };
 
   const handleUseCurrentLocation = () => {
@@ -419,23 +386,15 @@ export default function HomePage() {
         requestBody.locationText = locationText.trim();
       }
 
-      const response = await fetch('/api/recommend', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get recommendations');
+      // Use backend API (from config.json)
+      if (!apiBaseUrl) {
+        throw new Error('Full recommendations require a backend server. Please set API_BASE_URL in config.json. Demo buttons are available for testing.');
       }
 
-      const data = await response.json();
+      const data = await getRecommendations(requestBody, apiBaseUrl);
       
       // Store results in sessionStorage and navigate
-      sessionStorage.setItem('recommendationResults', JSON.stringify(data));
+      safeSetItem('sessionStorage', 'recommendationResults', JSON.stringify(data));
       setIsSubmitting(false);
       router.push('/results');
     } catch (err) {
@@ -455,6 +414,18 @@ export default function HomePage() {
   return (
     <AppShell>
       <div className="max-w-2xl mx-auto">
+        {/* Safari Diagnostics (dev only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
+            <div className="font-semibold mb-1">Safari Diagnostics:</div>
+            <div>Hydration: {debugInfo.hydrated ? '✓ ON' : '✗ OFF'}</div>
+            <div>Google Places: {debugInfo.googlePlaces}</div>
+            <div>Storage: {debugInfo.storage}</div>
+            {debugInfo.lastError && (
+              <div className="text-red-600 mt-1">Error: {debugInfo.lastError.substring(0, 100)}</div>
+            )}
+          </div>
+        )}
         <div className="text-center mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             Where are you and what are you craving?

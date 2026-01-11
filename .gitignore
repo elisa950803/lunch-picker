@@ -87,3 +87,9 @@ dist/
 .next/
 .vercel
 # Note: out/ is NOT ignored - needed for gh-pages deployment
+
+# Backend build artifacts (but keep source code)
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/

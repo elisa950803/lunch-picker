@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: 'Find great lunch and dinner recommendations near your workplace',
 };
 
+import { ConfigProvider } from './components/ConfigProvider';
+
 export default function RootLayout({
   children,
 }: {
@@ -28,14 +30,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {googleMapsApiKey ? (
-          <Script
-            id="google-maps-script"
-            src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
-            strategy="afterInteractive"
-          />
-        ) : null}
-        {children}
+        <ConfigProvider>
+          {googleMapsApiKey ? (
+            <Script
+              id="google-maps-script"
+              src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+              strategy="afterInteractive"
+            />
+          ) : null}
+          {children}
+        </ConfigProvider>
       </body>
     </html>
   );

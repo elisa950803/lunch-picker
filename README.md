@@ -2,6 +2,83 @@
 
 A Next.js API that provides restaurant recommendations based on location, weather, holidays, and preferences.
 
+## 🚀 Deployment
+
+### Architecture
+
+This app uses a **static frontend (GitHub Pages) + hosted backend API** architecture:
+
+- **Frontend**: Static Next.js export deployed to GitHub Pages
+- **Backend**: Next.js API routes deployed to Vercel/Render/Fly (any Node.js hosting)
+- **Runtime Config**: Backend URL configured via `public/config.json` (no rebuild needed)
+
+### Backend Deployment (Required for Full Recommendations)
+
+The backend runs the existing `/api/recommend` route logic. Deploy it to any Node.js hosting:
+
+1. **Deploy to Vercel** (recommended for Next.js):
+   ```bash
+   # Install Vercel CLI
+   npm i -g vercel
+   
+   # Deploy (it will detect Next.js automatically)
+   vercel
+   ```
+   - Set environment variables in Vercel dashboard:
+     - `GOOGLE_MAPS_API_KEY` - Your Google Maps API key
+     - `CALENDARIFIC_API_KEY` - (Optional) Calendarific API key
+
+2. **Alternative: Deploy to Render/Fly/Railway**:
+   - Create a Node.js service
+   - Point to your repository
+   - Set environment variables
+   - Deploy
+
+3. **Copy the backend URL** (e.g., `https://lunch-picker.vercel.app`)
+
+### Frontend Deployment (GitHub Pages)
+
+1. **Update Runtime Config** (no rebuild needed):
+   - Edit `public/config.json`:
+     ```json
+     {
+       "API_BASE_URL": "https://your-backend.vercel.app"
+     }
+     ```
+   - Commit and push to `main` branch
+   - Run `npm run deploy` to update GitHub Pages
+
+2. **Initial Deploy**:
+   ```bash
+   npm run deploy
+   ```
+   This builds the static site and deploys to the `gh-pages` branch.
+
+3. **Configure GitHub Pages**:
+   - Go to repository Settings → Pages
+   - Source: Deploy from a branch
+   - Branch: `gh-pages`
+   - Folder: `/ (root)`
+   - Save
+
+4. **Changing Backend URL** (after initial deploy):
+   - Edit `public/config.json` with new URL
+   - Commit and push to `main`
+   - Run `npm run deploy` again
+   - No code changes needed, just update the JSON file
+
+### Environment Variables
+
+**Backend (server-only)**:
+- `GOOGLE_MAPS_API_KEY` - Google Maps API key (server-side)
+- `CALENDARIFIC_API_KEY` - (Optional) Calendarific API key
+
+**Frontend (build-time)**:
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` - Google Maps API key (client-side, for Places Autocomplete)
+
+**Runtime (config.json)**:
+- `API_BASE_URL` - Backend API URL (loaded at runtime, no rebuild needed)
+
 ## 🌐 GitHub Pages Deployment
 
 This app is deployed to GitHub Pages at: **https://elisa950803.github.io/lunch-picker/**
