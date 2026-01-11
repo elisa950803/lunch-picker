@@ -1,3 +1,10 @@
+# Vercel ignore file - files/folders excluded from Vercel build
+mcp/
+mcp/**
+backend/
+backend/**
 out/
 .next/
 node_modules/
+*.log
+.DS_Store
