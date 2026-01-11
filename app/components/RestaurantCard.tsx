@@ -6,7 +6,7 @@ import Badge from './Badge';
 interface RestaurantCardProps {
   name: string;
   why: string[];
-  suggestedDishes: string[];
+  suggestedDishes?: string[]; // Optional for backward compatibility, but no longer displayed
   etaMinutes: number;
   websiteUrl?: string;
   mapsUrl: string;
@@ -28,7 +28,7 @@ export default function RestaurantCard({
         <div className="flex flex-col sm:flex-row gap-4 mb-4">
           {photoUrl && (
             <div className="flex-shrink-0">
-              <div className="w-full sm:w-24 h-24 sm:h-24 rounded-2xl overflow-hidden bg-gray-100">
+              <div className="w-full sm:w-36 h-36 sm:h-36 rounded-2xl overflow-hidden bg-gray-100">
                 <img
                   src={photoUrl}
                   alt={name}
@@ -63,16 +63,6 @@ export default function RestaurantCard({
             </ul>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-gray-600 mb-2">Suggested dishes:</p>
-            <div className="flex flex-wrap gap-2">
-              {suggestedDishes.map((dish, index) => (
-                <Badge key={index} variant="default" size="sm">
-                  {dish}
-                </Badge>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">

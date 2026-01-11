@@ -115,8 +115,6 @@ export interface RecommendRequest {
   lat?: number;
   lng?: number;
   locationText?: string;
-  budget?: 'low' | 'mid' | 'high';
-  dietary?: string[];
   cuisine?: string[];
   maxLunchMinutes?: number;
 }

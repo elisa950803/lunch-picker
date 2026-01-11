@@ -48,6 +48,8 @@ interface RecommendationResults {
       lunchWithinLimitCount: number;
       showMoreOptionsEnabled: boolean;
     };
+    // Welcome message from backend (preferred), falls back to client-side generation if not provided
+    welcomeMessage?: string;
   };
   lunch: Array<{
     name: string;
@@ -221,6 +223,7 @@ export default function ResultsPage() {
           message="Looks like we couldn't find any recommendations. Let's try a different search!"
           actionLabel="Start New Search"
           actionHref="/"
+          onBack={() => router.back()}
         />
       </AppShell>
     );
@@ -239,7 +242,7 @@ export default function ResultsPage() {
               Today's vibe
             </h2>
             <p className="text-gray-600 whitespace-pre-line">
-              {generateWelcomeMessage(context)}
+              {context.welcomeMessage ?? generateWelcomeMessage(context)}
             </p>
           </div>
           

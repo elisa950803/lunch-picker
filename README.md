@@ -2,6 +2,10 @@
 
 A Next.js API that provides restaurant recommendations based on location, weather, holidays, and preferences.
 
+## 🌐 Live Demo
+
+**👉 [Try it live: https://elisa950803.github.io/lunch-picker/](https://elisa950803.github.io/lunch-picker/)**
+
 ## 🚀 Deployment
 
 ### Architecture

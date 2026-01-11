@@ -300,11 +300,10 @@ function deriveWeatherBucket(data: {
   
   // Or: precipitation > 0 but below heavy threshold
   const isLightPrecip = (precipitationMm > 0 || rainMm > 0) && !isHeavyPrecip;
-  
-  // Or: temperature below 10°C or above 30°C (uncomfortable but not extreme)
-  const isUncomfortableTemp = apparentTemperatureC < 10 || apparentTemperatureC > 30;
 
-  if (isDrizzle || isRain || isFreezingPrecip || isLightSnow || isLightPrecip || isUncomfortableTemp) {
+  // Only classify as drizzle_or_light_precip if there's actual precipitation or weather codes indicate it
+  // Temperature alone (cold/hot clear days) should NOT trigger drizzle classification
+  if (isDrizzle || isRain || isFreezingPrecip || isLightSnow || isLightPrecip) {
     return { weatherBucket: 'drizzle_or_light_precip', maxWalkMinutes: 10 };
   }
 

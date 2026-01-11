@@ -13,20 +13,18 @@ let configLoadPromise: Promise<RuntimeConfig | null> | null = null;
 
 /**
  * Get the base path for the app (e.g., /lunch-picker on GitHub Pages)
- * Derived from <base href> if present, else empty string
+ * Derived from <base href> if present, else from URL pathname
  */
 function getBasePath(): string {
   if (typeof window === 'undefined') return '';
   
-  // Prefer <base href="..."> if present
-  const baseTag = document.querySelector('base');
-  if (baseTag?.getAttribute('href')) {
-    const href = baseTag.getAttribute('href')!;
-    return href.replace(/\/$/, ''); // Remove trailing slash
-  }
+  // Compute repo base path
+  // First try <base href>, then fallback to first path segment
+  const baseHref = (document.querySelector('base')?.getAttribute('href') ?? '').replace(/\/$/, '');
+  const pathSegments = window.location.pathname.split('/').filter(Boolean);
+  const repoBase = baseHref || (pathSegments.length ? '/' + pathSegments[0] : '');
   
-  // Else empty string (no basePath)
-  return '';
+  return repoBase;
 }
 
 /**
@@ -49,7 +47,13 @@ export async function loadRuntimeConfig(): Promise<RuntimeConfig | null> {
   configLoadPromise = (async () => {
     try {
       const basePath = getBasePath();
-      const configUrl = `${basePath}/config.json`;
+      // Ensure no double slashes: basePath is either empty or starts with /, config.json starts with /
+      const configUrl = basePath + '/config.json';
+      
+      // Debug log (only in dev)
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[RuntimeConfig] Fetching config from:', configUrl);
+      }
       
       const response = await fetch(configUrl, {
         cache: 'no-store', // Always fetch fresh config

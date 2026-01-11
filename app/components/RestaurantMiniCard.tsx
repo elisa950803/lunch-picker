@@ -30,7 +30,7 @@ export default function RestaurantMiniCard({
         <img
           src={photoUrl}
           alt={name}
-          className="w-full h-32 object-cover rounded-lg mb-3"
+          className="w-full h-40 object-cover rounded-lg mb-3"
         />
       )}
       <h4 className="font-semibold text-gray-900 mb-2">{name}</h4>
@@ -41,18 +41,6 @@ export default function RestaurantMiniCard({
         <p className="text-sm text-gray-700 mb-3">
           {why[0]}
         </p>
-      )}
-      {suggestedDishes && suggestedDishes.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {suggestedDishes.slice(0, 3).map((dish, index) => (
-            <span
-              key={index}
-              className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
-            >
-              {dish}
-            </span>
-          ))}
-        </div>
       )}
       <div className="flex gap-2">
         {websiteUrl && (
