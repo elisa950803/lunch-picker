@@ -83,3 +83,8 @@ dist/
 out/
 *.min.js
 *.min.css
+
+# Next.js
+.next/
+out/
+.vercel
