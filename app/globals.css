@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+/* Google Places Autocomplete dropdown styling - Duolingo-cute style */
+.pac-container {
+  border-radius: 1rem !important;
+  border: 2px solid rgb(229, 231, 235) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  margin-top: 0.25rem !important;
+  font-family: inherit !important;
+  overflow: visible !important; /* Changed from hidden to visible so dropdown can extend beyond container */
+  z-index: 9999 !important; /* Ensure dropdown appears above all other elements */
+}
+
+.pac-item {
+  padding: 0.75rem 1rem !important;
+  cursor: pointer !important;
+  border-top: 1px solid rgb(243, 244, 246) !important;
+  transition: background-color 0.15s ease-in-out !important;
+}
+
+.pac-item:first-child {
+  border-top: none !important;
+}
+
+.pac-item:hover,
+.pac-item-selected {
+  background-color: rgb(255, 247, 237) !important; /* orange-50 */
+}
+
+.pac-item-query {
+  font-size: 0.875rem !important;
+  color: rgb(17, 24, 39) !important; /* gray-900 */
+  font-weight: 500 !important;
+}
+
+.pac-matched {
+  color: rgb(249, 115, 22) !important; /* orange-500 */
+  font-weight: 600 !important;
+}
+
+.pac-icon {
+  margin-right: 0.5rem !important;
+  width: 1rem !important;
+  height: 1rem !important;
+}

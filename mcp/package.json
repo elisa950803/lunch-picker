@@ -1,0 +1,35 @@
+{
+  "name": "food-recommendation-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Food Around Work Recommendations",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "restaurants",
+    "weather",
+    "holidays"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "date-holidays": "^3.26.6",
+    "dotenv": "^16.4.5"
+  },
+  "bin": {
+    "food-recommendation-mcp": "./dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
